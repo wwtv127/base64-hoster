@@ -57,8 +57,8 @@
         <div id="app-controls">
             <!-- Header and Instructions -->
             <header class="text-center">
-                <h1 class="text-4xl font-extrabold text-primary">Base64 Hosted Content Renderer</h1>
-                <p class="mt-2 text-surface-light text-lg">Decode and render HTML content directly from a URL parameter.</p>
+                <h1 class="text-4xl font-extrabold text-primary">Hash-Based Content Hoster</h1>
+                <p class="mt-2 text-surface-light text-lg">Encode HTML and host it via a URL Hash Fragment (e.g., `#encoded_content`).</p>
             </header>
 
             <!-- Control Panel -->
@@ -68,7 +68,7 @@
                 <!-- Input: Raw HTML for Encoding/Testing -->
                 <div>
                     <label for="raw-html-input" class="block text-sm font-medium mb-1">1. Enter Raw HTML to Host:</label>
-                    <textarea id="raw-html-input" rows="5" placeholder="Example: <h1>Hello World!</h1><p>This is hosted via a URL parameter.</p>" class="w-full p-3 rounded-lg bg-gray-700 text-text-light border-gray-600 focus:ring-primary focus:border-primary"></textarea>
+                    <textarea id="raw-html-input" rows="5" placeholder="Example: <h1>Hello World!</h1><p>This is hosted via the URL hash.</p>" class="w-full p-3 rounded-lg bg-gray-700 text-text-light border-gray-600 focus:ring-primary focus:border-primary"></textarea>
                 </div>
 
                 <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
@@ -147,15 +147,15 @@
         /** Decodes Base64 and renders the HTML in the iframe's srcdoc. */
         function renderContent(base64Code) {
             if (!base64Code) {
-                // Content to display when no code is provided
+                // Content to display when no hash is provided
                 iframe.srcdoc = `
                     <div style="padding: 20px; text-align: center; font-family: sans-serif; color: #374151;">
-                        <h1 style="color: #4f46e5;">Host Mode Initialized</h1>
-                        <p>No 'code' parameter found in the URL. Use the control panel above to generate a hosting link.</p>
+                        <h1 style="color: #4f46e5;">Hash Mode Initialized</h1>
+                        <p>No hash fragment found in the URL. Use the control panel above to generate a hosting link.</p>
                     </div>
                 `;
                 // Show this message only in non-host mode
-                if (!window.location.search.includes('code=')) {
+                if (window.location.hash === '') {
                     showMessage("No Base64 code provided. Use the control panel to generate a URL.", 'info');
                 }
                 return;
@@ -169,7 +169,7 @@
                 iframe.srcdoc = decodedHtml;
 
                 // Only show success message if not in host mode (i.e., when clicked via the render button)
-                if (!window.location.search.includes('code=')) {
+                if (window.location.hash === '') {
                     showMessage("Content rendered successfully!", 'success');
                 }
 
@@ -180,7 +180,7 @@
                 iframe.srcdoc = `
                     <div style="padding: 20px; text-align: center; font-family: sans-serif; color: #374151;">
                         <h1 style="color: #ef4444;">Decoding Failed</h1>
-                        <p style="color: #6b7280;">The Base64 string is invalid or corrupted.</p>
+                        <p style="color: #6b7280;">The Base64 string in the hash is invalid or corrupted.</p>
                     </div>
                 `;
             }
@@ -188,7 +188,7 @@
 
         // --- Event Handlers ---
 
-        /** Encodes the input HTML and generates the hosting URL. */
+        /** Encodes the input HTML and generates the hosting URL using the hash fragment. */
         encodeButton.addEventListener('click', () => {
             const rawHtml = rawHtmlInput.value.trim();
             if (!rawHtml) {
@@ -198,13 +198,14 @@
 
             try {
                 // 1. Encode the raw HTML to Base64
+                // Note: Hash fragments do not need URL encoding for standard characters, but btoa output is safe.
                 const base64Code = btoa(rawHtml);
 
                 // 2. Get the current page's URL base
                 const baseUrl = window.location.origin + window.location.pathname;
 
-                // 3. Construct the full hosting URL
-                const hostingUrl = `${baseUrl}?code=${encodeURIComponent(base64Code)}`;
+                // 3. Construct the full hosting URL using the hash fragment (#)
+                const hostingUrl = `${baseUrl}#${base64Code}`;
 
                 // 4. Update the UI
                 generatedUrlInput.value = hostingUrl;
@@ -243,14 +244,16 @@
             showMessage("Hosting URL copied to clipboard!", 'success');
         });
 
-        // --- Initialization: Check for URL Parameter on Load ---
+        // --- Initialization: Check for Hash Fragment on Load ---
 
         window.addEventListener('load', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const base64Code = urlParams.get('code');
+            const hash = window.location.hash; // Gets the hash fragment, including the '#'
 
-            if (base64Code) {
-                // If 'code' parameter is present, automatically render it AND enter host mode
+            // If a hash is present (not just '#'), proceed to host mode
+            if (hash.length > 1) { 
+                const base64Code = hash.substring(1); // Remove the leading '#'
+
+                // Render the content
                 renderContent(base64Code);
 
                 // ** HOST MODE ACTIVATION: Hide UI and make content full screen **
@@ -278,7 +281,7 @@
                 iframeWrapper.classList.add('h-full');
 
             } else {
-                // No 'code' parameter, stay in app mode and show initial message
+                // No hash fragment, stay in app mode and show initial message
                 renderContent(null);
             }
         });
