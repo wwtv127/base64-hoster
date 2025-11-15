@@ -3,7 +3,243 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Base64 HTML Hoster (Large File Support)</title>
+    <title>Persistent HTML Hoster (Firestore)</title>
+    <!-- Load Firebase Modules (Must be imported with type="module" in a script block) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Setting Firebase variables globally for access later
+        window.firebaseApp = null;
+        window.db = null;
+        window.auth = null;
+        window.userId = null;
+        window.isAuthReady = false;
+
+        // Constants for Firestore paths
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const COLLECTION_PATH = `/artifacts/${appId}/public/data/hosted_content`;
+        
+        // Utility for displaying messages
+        const showMessage = (text, type = 'info') => {
+            const messageBox = document.getElementById('message-box');
+            messageBox.textContent = text;
+            messageBox.className = 'fixed top-0 left-1/2 -translate-x-1/2 mt-4 p-3 rounded-lg shadow-lg text-sm font-medium z-50 min-w-[300px] text-center';
+            messageBox.classList.remove('hidden', 'bg-red-200', 'bg-green-200', 'text-red-800', 'text-green-800');
+            
+            if (type === 'error') {
+                messageBox.classList.add('bg-red-200', 'text-red-800');
+            } else if (type === 'success') {
+                messageBox.classList.add('bg-green-200', 'text-green-800');
+            } else { // info
+                messageBox.classList.add('bg-yellow-200', 'text-yellow-800');
+            }
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
+        };
+        window.showMessage = showMessage; // Make accessible globally
+
+        // Core initialization function
+        const initializeFirebase = async () => {
+            const generateButton = document.getElementById('generate-button');
+            try {
+                // Set debug logging
+                setLogLevel('debug'); 
+                
+                // 1. Load Config
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                
+                if (!firebaseConfig || !firebaseConfig.projectId) {
+                    throw new Error("Firebase configuration object is empty or missing 'projectId'. Cannot connect to the database.");
+                }
+
+                // 2. Initialize App
+                window.firebaseApp = initializeApp(firebaseConfig);
+                window.db = getFirestore(window.firebaseApp);
+                window.auth = getAuth(window.firebaseApp);
+
+                // 3. Authenticate
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(window.auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(window.auth);
+                }
+                
+                window.userId = window.auth.currentUser?.uid || crypto.randomUUID();
+                window.isAuthReady = true;
+
+                // 4. Update UI
+                console.log(`Firebase initialized. User ID: ${window.userId}`);
+                generateButton.textContent = 'Upload & Generate Permanent Link';
+                generateButton.disabled = false;
+                generateButton.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            } catch (e) {
+                console.error("Initialization failed. Error:", e);
+                showMessage(`Initialization failed. Error: ${e.message}`, 'error');
+                generateButton.textContent = 'Database Initialization Failed';
+                generateButton.disabled = true;
+            }
+        };
+
+        // --- Core Functions for Upload and Retrieval ---
+
+        /** Generates a short, random ID */
+        const generateId = () => Math.random().toString(36).substring(2, 9); // 7 character alphanumeric
+
+        /** Uploads the content to Firestore */
+        window.uploadAndGenerateLink = async () => {
+            if (!window.isAuthReady || !window.db) {
+                showMessage("Database is not ready. Please wait for initialization.", 'error');
+                return;
+            }
+
+            const rawHtmlInput = document.getElementById('raw-html-input');
+            const generatedUrlInput = document.getElementById('generated-url');
+            const urlOutputContainer = document.getElementById('url-output-container');
+            const generateButton = document.getElementById('generate-button');
+            
+            const rawHtml = rawHtmlInput.value.trim();
+
+            if (!rawHtml) {
+                showMessage("Please enter some HTML content first.", 'error');
+                return;
+            }
+
+            generateButton.disabled = true;
+            generateButton.textContent = 'Uploading...';
+            generateButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+            try {
+                // Content preparation
+                const expirationDays = 7;
+                const expirationTime = new Date();
+                expirationTime.setDate(expirationTime.getDate() + expirationDays);
+                
+                // Data to store
+                const hostData = {
+                    content: rawHtml, // Stored directly, no encoding needed
+                    createdAt: new Date().toISOString(),
+                    expiresAt: expirationTime.toISOString(),
+                    userId: window.userId
+                };
+
+                // Upload to Firestore and let Firestore generate the ID
+                const docRef = await addDoc(collection(window.db, COLLECTION_PATH), hostData);
+                const docId = docRef.id;
+                
+                // Construct the clean hosting URL using the hash fragment (preferred for client-side routing)
+                const baseUrl = window.location.origin + window.location.pathname;
+                const hostingUrl = `${baseUrl}#${docId}`;
+
+                // Update the UI
+                generatedUrlInput.value = hostingUrl;
+                urlOutputContainer.classList.remove('hidden');
+
+                // Auto-copy the URL
+                generatedUrlInput.select();
+                document.execCommand('copy');
+                showMessage(`Link generated and copied! Expires in ${expirationDays} days.`, 'success');
+
+            } catch (e) {
+                console.error("Firestore Upload Error:", e);
+                showMessage(`Firestore Upload Error: ${e.message}`, 'error');
+            } finally {
+                generateButton.disabled = false;
+                generateButton.textContent = 'Upload & Generate Permanent Link';
+                generateButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        };
+
+        /** Fetches content from Firestore by ID and renders it. */
+        window.retrieveAndRender = async (docId) => {
+            const iframe = document.getElementById('content-iframe');
+            
+            const renderError = (title, message) => {
+                 iframe.srcdoc = `<div style="padding: 20px; text-align: center; font-family: sans-serif; color: #ef4444;">
+                    <h1 style="font-size: 1.5rem;">${title}</h1>
+                    <p style="color: #4b5563;">${message}</p>
+                </div>`;
+            };
+
+            try {
+                const docRef = doc(window.db, COLLECTION_PATH, docId);
+                const docSnap = await getDoc(docRef);
+
+                if (!docSnap.exists()) {
+                    renderError("404 Not Found", `The hosted content ID <b>${docId}</b> does not exist.`);
+                    return;
+                }
+
+                const data = docSnap.data();
+                const now = new Date().getTime();
+                const expiresAt = new Date(data.expiresAt).getTime();
+
+                if (now > expiresAt) {
+                    renderError("Content Expired", `This content expired on ${new Date(expiresAt).toLocaleDateString()}.`);
+                    return;
+                }
+
+                // Render the content directly
+                iframe.srcdoc = data.content;
+
+            } catch (e) {
+                console.error("Firestore Retrieval Error:", e);
+                renderError("Database Error", `Failed to retrieve content. Check console for details.`);
+            }
+        };
+
+        /** Checks the URL hash for an ID and routes the app. */
+        window.checkAndRoute = async () => {
+            const docId = window.location.hash.substring(1); // Get content after '#'
+            const appControls = document.getElementById('app-controls');
+            const hostOutput = document.getElementById('host-output');
+            
+            if (docId && docId.length > 3) {
+                // Host Mode: Hide controls and show full-screen host view
+                document.body.classList.add('host-mode');
+                document.getElementById('main-container').classList.add('h-screen', 'w-full', '!p-0');
+                appControls.classList.add('hidden');
+                hostOutput.classList.remove('hidden');
+
+                // If Firebase isn't ready yet, wait for it
+                if (!window.isAuthReady) {
+                    // Quick check, but the window.onload handler will initialize it
+                    await new Promise(resolve => setTimeout(resolve, 500)); 
+                    if (!window.isAuthReady) {
+                        // Display a loading state while waiting for auth
+                         document.getElementById('content-iframe').srcdoc = `<div style="padding: 20px; text-align: center; font-family: sans-serif; color: #4f46e5;">
+                            <h1 style="font-size: 1.5rem;">Loading Content...</h1>
+                            <p style="color: #6b7280;">Waiting for database connection to retrieve <b>${docId}</b>.</p>
+                        </div>`;
+                        // Re-check after a brief moment (or rely on the main flow)
+                    }
+                }
+                
+                // Once ready, retrieve and render
+                if (window.isAuthReady && window.db) {
+                    await window.retrieveAndRender(docId);
+                }
+
+            } else {
+                // Generator Mode: Show controls
+                hostOutput.classList.add('hidden');
+                appControls.classList.remove('hidden');
+                document.body.classList.remove('host-mode');
+                document.getElementById('main-container').classList.remove('h-screen', 'w-full', '!p-0');
+            }
+        };
+
+        // Initialize Firebase on script load
+        initializeFirebase();
+
+        // Listen for hash changes if the user manually changes the URL hash
+        window.addEventListener('hashchange', window.checkAndRoute);
+
+    </script>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -26,7 +262,6 @@
             margin: 0;
             padding: 0;
             font-family: 'Inter', sans-serif;
-            transition: background-color 0.3s;
         }
         #main-container {
             min-height: 100vh;
@@ -36,11 +271,7 @@
             height: 100%;
             border: none;
             background-color: white;
-            /* Ensure the iframe is invisible when it's just hosting content */
-            visibility: inherit;
-        }
-        .host-mode #content-iframe {
-            visibility: visible;
+            /* Ensure the iframe is visible when in host mode */
         }
         .host-mode #main-container {
             padding: 0 !important;
@@ -49,7 +280,7 @@
 </head>
 <body class="bg-background text-text-dark">
 
-    <div id="main-container" class="p-4 sm:p-8 flex flex-col items-center justify-center space-y-8">
+    <div id="main-container" class="p-4 sm:p-8 flex flex-col items-center justify-start space-y-8">
 
         <!-- Error/Message Box -->
         <div id="message-box" class="fixed top-0 left-1/2 -translate-x-1/2 mt-4 p-3 rounded-lg shadow-lg text-sm font-medium z-50 min-w-[300px] text-center hidden" role="alert"></div>
@@ -57,24 +288,29 @@
         <!-- UI Controls Wrapper (Generator Mode) -->
         <div id="app-controls" class="w-full max-w-4xl">
             <header class="text-center mb-8">
-                <h1 class="text-4xl font-extrabold text-primary">Base64 Hoster (Large File Ready)</h1>
-                <p class="mt-2 text-lg text-gray-600">Encodes HTML and stores it in your browser's local database for a short, clean URL.</p>
-                <p class="mt-1 text-sm text-red-500 font-semibold">⚠️ NOTE: Content must be retrieved from the same browser/machine that generated the link. This is a local hosting solution.</p>
+                <h1 class="text-4xl font-extrabold text-primary">Persistent HTML Hoster</h1>
+                <p class="mt-2 text-lg text-gray-600">Hosts large HTML content using a database, providing a clean, shareable URL.</p>
+                <p class="mt-1 text-sm text-red-500 font-semibold">Content is hosted remotely and expires after 7 days.</p>
             </header>
 
             <!-- Control Panel -->
             <div class="bg-surface p-6 rounded-xl shadow-2xl space-y-4 border border-gray-200">
-                <h2 class="text-2xl font-semibold mb-4 border-b border-gray-300 pb-2">Generate Link</h2>
+                <h2 class="text-2xl font-semibold mb-4 border-b border-gray-300 pb-2">Upload Content</h2>
 
                 <!-- Input: Raw HTML for Uploading -->
                 <div>
-                    <label for="raw-html-input" class="block text-sm font-medium mb-1">1. Enter Raw HTML (Supports very large content):</label>
+                    <label for="raw-html-input" class="block text-sm font-medium mb-1">1. Enter Raw HTML (Supports large content):</label>
                     <textarea id="raw-html-input" rows="8" placeholder="Paste your full HTML content here (e.g., <html>...</html>)" class="w-full p-3 rounded-lg bg-gray-50 text-text-dark border-gray-300 focus:ring-primary focus:border-primary"></textarea>
                 </div>
                 
-                <!-- Generate Button -->
-                <button id="generate-button" class="w-full bg-primary hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-indigo-400/50">
-                    Encode & Generate Clean Link
+                <!-- Upload Button -->
+                <!-- Button is disabled until Firebase init is complete -->
+                <button 
+                    id="generate-button" 
+                    onclick="uploadAndGenerateLink()" 
+                    disabled 
+                    class="w-full bg-primary hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-indigo-400/50 opacity-50 cursor-not-allowed">
+                    Initializing Database...
                 </button>
 
                 <!-- Output: Generated URL -->
@@ -88,249 +324,36 @@
                             </svg>
                         </button>
                     </div>
-                    <p class="text-xs mt-1 text-gray-500">The content is stored locally in this browser. The link uses the ID to retrieve it.</p>
+                    <p class="text-xs mt-1 text-gray-500">The content is stored remotely in the database. Share this link for hosting.</p>
                 </div>
             </div>
         </div>
 
-        <!-- Iframe for Hosted Content -->
+        <!-- Iframe for Hosted Content (Visible in Host Mode) -->
         <div id="host-output" class="w-full h-full flex-1 hidden">
              <iframe id="content-iframe" title="Hosted Content"></iframe>
         </div>
     </div>
 
-    <script>
-        const DB_NAME = 'Base64HosterDB';
-        const STORE_NAME = 'hosted_html_store';
-        const DB_VERSION = 1;
+    <script type="text/javascript">
+        // Event listeners attached outside the module script block
+        window.onload = function() {
+            // Check the URL hash immediately after Firebase has had a moment to initialize
+            setTimeout(window.checkAndRoute, 200);
 
-        let db;
-
-        /** Shows a temporary message in the message box. */
-        function showMessage(text, type = 'info') {
-            const messageBox = document.getElementById('message-box');
-            messageBox.textContent = text;
-            messageBox.classList.remove('hidden', 'bg-red-200', 'bg-yellow-200', 'bg-green-200', 'text-red-800', 'text-yellow-800', 'text-green-800');
-            
-            if (type === 'error') {
-                messageBox.classList.add('bg-red-200', 'text-red-800');
-            } else if (type === 'success') {
-                 messageBox.classList.add('bg-green-200', 'text-green-800');
-            } else { // info
-                messageBox.classList.add('bg-yellow-200', 'text-yellow-800');
-            }
-            setTimeout(() => {
-                messageBox.classList.add('hidden');
-            }, 5000);
-        }
-
-        /** Initialize IndexedDB */
-        function initDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-                request.onerror = event => {
-                    reject('IndexedDB Error: ' + event.target.errorCode);
-                };
-
-                request.onsuccess = event => {
-                    db = event.target.result;
-                    resolve(db);
-                };
-
-                request.onupgradeneeded = event => {
-                    const db = event.target.result;
-                    if (!db.objectStoreNames.contains(STORE_NAME)) {
-                        // Create an object store to hold the HTML content, using 'id' as the key path
-                        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-                    }
-                };
-            });
-        }
-
-        /** Generates a short, random ID */
-        function generateId() {
-            return Math.random().toString(36).substring(2, 9); // 7 character alphanumeric
-        }
-        
-        /** Stores the Base64 content and ID in IndexedDB */
-        function storeContent(id, base64Content) {
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction([STORE_NAME], 'readwrite');
-                const store = transaction.objectStore(STORE_NAME);
-                
-                const request = store.put({ id: id, content: base64Content, timestamp: new Date().getTime() });
-
-                request.onsuccess = () => resolve();
-                request.onerror = event => reject('Error storing content: ' + event.target.error);
-            });
-        }
-
-        /** Retrieves the Base64 content from IndexedDB by ID */
-        function retrieveContent(id) {
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction([STORE_NAME], 'readonly');
-                const store = transaction.objectStore(STORE_NAME);
-                
-                const request = store.get(id);
-
-                request.onsuccess = event => {
-                    if (event.target.result) {
-                        resolve(event.target.result.content);
-                    } else {
-                        resolve(null); // Content not found
-                    }
-                };
-                request.onerror = event => reject('Error retrieving content: ' + event.target.error);
-            });
-        }
-
-        /** Core function to handle link generation */
-        async function handleGeneration() {
-            const rawHtmlInput = document.getElementById('raw-html-input');
-            const generatedUrlInput = document.getElementById('generated-url');
-            const urlOutputContainer = document.getElementById('url-output-container');
-            const generateButton = document.getElementById('generate-button');
-            
-            const rawHtml = rawHtmlInput.value.trim();
-
-            if (!rawHtml) {
-                showMessage("Please enter some HTML content first.", 'error');
-                return;
-            }
-
-            generateButton.disabled = true;
-            generateButton.textContent = 'Encoding and Saving...';
-            generateButton.classList.add('opacity-50', 'cursor-not-allowed');
-
-            try {
-                // 1. Base64 Encode the content
-                const base64Content = btoa(unescape(encodeURIComponent(rawHtml)));
-                
-                // 2. Generate a unique ID
-                const docId = generateId();
-
-                // 3. Store the large Base64 content in IndexedDB
-                await storeContent(docId, base64Content);
-                
-                // 4. Construct the clean hosting URL using the hash fragment
-                const baseUrl = window.location.origin + window.location.pathname;
-                const hostingUrl = `${baseUrl}#${docId}`;
-
-                // 5. Update the UI and copy the URL
-                generatedUrlInput.value = hostingUrl;
-                urlOutputContainer.classList.remove('hidden');
-
-                // Auto-copy the URL
-                generatedUrlInput.select();
-                document.execCommand('copy');
-                showMessage(`Link generated and copied! Content is now locally hosted in your browser.`, 'success');
-
-            } catch (e) {
-                console.error("Link Generation Error:", e);
-                showMessage("Failed to generate link. See console for details.", 'error');
-            } finally {
-                generateButton.disabled = false;
-                generateButton.textContent = 'Encode & Generate Clean Link';
-                generateButton.classList.remove('opacity-50', 'cursor-not-allowed');
-            }
-        }
-        
-        /** Renders content or an error message into the iframe. */
-        function renderContent(base64Content) {
-            const iframe = document.getElementById('content-iframe');
-            try {
-                // Decode the Base64 content
-                const htmlContent = decodeURIComponent(escape(atob(base64Content)));
-                
-                // Render the content via data URI to keep it safe and isolated
-                iframe.src = 'data:text/html;base64,' + base64Content;
-            } catch (e) {
-                iframe.srcdoc = `<div style="padding: 20px; text-align: center; font-family: sans-serif; color: #ef4444;">
-                    <h1>Decoding Error</h1>
-                    <p>Could not decode content or the content is malformed. ${e.message}</p>
-                </div>`;
-            }
-        }
-
-        /** Checks the URL for an ID and routes to host mode if found. */
-        async function checkAndRoute() {
-            const docId = window.location.hash.substring(1); // Get content after '#'
-            const appControls = document.getElementById('app-controls');
-            const hostOutput = document.getElementById('host-output');
-            
-            if (docId) {
-                // Host Mode: Fetch content from IndexedDB
-                document.body.classList.add('host-mode');
-                appControls.classList.add('hidden');
-                hostOutput.classList.remove('hidden');
-                
-                // Make the host area full screen
-                document.getElementById('main-container').classList.add('h-screen', 'w-full');
-                
-                try {
-                    const base64Content = await retrieveContent(docId);
-
-                    if (base64Content) {
-                        renderContent(base64Content);
-                    } else {
-                         // Content not found - possibly shared with someone else who didn't generate it.
-                         renderContent(btoa(`
-                            <div style="padding: 20px; text-align: center; font-family: sans-serif; color: #374151;">
-                                <h1 style="color: #ef4444;">Content Not Found</h1>
-                                <p style="color: #6b7280;">The content ID <b>${docId}</b> was not found in your browser's local storage. This content must be viewed on the same device/browser that generated the link, as it uses local IndexedDB storage.</p>
-                            </div>
-                         `));
-                    }
-
-                } catch (e) {
-                    console.error("IndexedDB Retrieval Error:", e);
-                    renderContent(btoa(`
-                        <div style="padding: 20px; text-align: center; font-family: sans-serif; color: #ef4444;">
-                            <h1>Database Access Error</h1>
-                            <p>Could not access the local IndexedDB. Check console for details.</p>
-                        </div>
-                    `));
-                }
-
-            } else {
-                // Generator Mode: Show controls
-                hostOutput.classList.add('hidden');
-                appControls.classList.remove('hidden');
-                document.body.classList.remove('host-mode');
-            }
-        }
-
-        // --- Initialization and Event Listeners ---
-        window.onload = async function() {
-            // Initialize IndexedDB
-            try {
-                await initDB();
-                console.log("IndexedDB initialized successfully.");
-                // After successful DB init, check the URL hash
-                checkAndRoute();
-            } catch (e) {
-                console.error(e);
-                showMessage(`Initialization Failed: ${e}. Local storage is required for this app to function.`, 'error');
-            }
-
-            const generateButton = document.getElementById('generate-button');
             const copyUrlButton = document.getElementById('copy-url-button');
             const generatedUrlInput = document.getElementById('generated-url');
-
-            generateButton.addEventListener('click', handleGeneration);
             
-            copyUrlButton.addEventListener('click', () => {
-                generatedUrlInput.select();
-                // Use document.execCommand for better compatibility in iframe environments
-                document.execCommand('copy'); 
-                showMessage("Hosting URL copied to clipboard!", 'success');
-            });
+            // Wait for the copy button to exist
+            if (copyUrlButton) {
+                copyUrlButton.addEventListener('click', () => {
+                    generatedUrlInput.select();
+                    // Use document.execCommand for better compatibility in iframe environments
+                    document.execCommand('copy'); 
+                    window.showMessage("Hosting URL copied to clipboard!", 'success');
+                });
+            }
         };
-        
-        // Listen for hash changes if the user manually changes the URL hash
-        window.addEventListener('hashchange', checkAndRoute);
-
     </script>
 </body>
 </html>
