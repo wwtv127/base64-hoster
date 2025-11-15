@@ -24,12 +24,15 @@
         let auth;
         let userId = null;
 
+        const uploadButton = document.getElementById('upload-button');
+
         // Function to initialize Firebase and authenticate
         async function initializeFirebase() {
             try {
-                if (!Object.keys(firebaseConfig).length) {
-                    throw new Error("Firebase configuration is missing.");
+                if (!Object.keys(firebaseConfig).length || !firebaseConfig.projectId) {
+                    throw new Error("Firebase configuration is missing or incomplete.");
                 }
+                
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
@@ -42,12 +45,17 @@
                 }
                 userId = auth.currentUser?.uid || crypto.randomUUID();
                 
+                // Enable the button once initialized
+                uploadButton.disabled = false;
+                uploadButton.textContent = 'Upload & Generate Permanent Link';
+
                 // Once authenticated, check URL parameters
                 checkAndRoute();
 
             } catch (error) {
                 console.error("Firebase Initialization or Authentication failed:", error);
-                document.getElementById('error-message').textContent = "Initialization failed. Check console for details.";
+                document.getElementById('error-message').classList.remove('hidden');
+                document.getElementById('error-message').textContent = `Initialization failed. Error: ${error.message}`;
             }
         }
 
@@ -84,7 +92,7 @@
             mainContent.classList.remove('p-4', 'sm:p-8', 'space-y-8', 'min-h-screen');
             mainContent.classList.add('h-screen', 'w-full', 'p-0');
 
-            renderedOutputArea.classList.remove('bg-white', 'p-2', 'rounded-xl', 'shadow-2xl');
+            renderedOutputArea.classList.remove('bg-white', 'p-2', 'rounded-xl', 'shadow-2xl', 'min-h-[400px]');
             renderedOutputArea.classList.add('w-full', 'h-full', 'p-0', 'm-0', 'flex', 'flex-col');
             outputTitle.classList.add('hidden');
 
@@ -111,6 +119,11 @@
 
         /** Uploads the HTML content to Firestore and generates the unique URL. */
         async function uploadAndGenerateLink() {
+            if (!db) {
+                showMessage("Database not ready. Please wait for initialization.", 'error');
+                return;
+            }
+
             const rawHtmlInput = document.getElementById('raw-html-input');
             const durationInput = document.getElementById('duration-select');
             const rawHtml = rawHtmlInput.value.trim();
@@ -121,16 +134,17 @@
                 return;
             }
 
-            const uploadButton = document.getElementById('upload-button');
             uploadButton.disabled = true;
             uploadButton.textContent = 'Uploading...';
 
             try {
                 // 1. Calculate Expiry Date
                 const now = new Date();
-                const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000); // Days to milliseconds
+                // Days to milliseconds
+                const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000); 
 
                 // 2. Define the public collection path
+                // Public collection structure: /artifacts/{appId}/public/data/hosted_files
                 const collectionPath = `artifacts/${appId}/public/data/hosted_files`;
 
                 // 3. Save the document to Firestore
@@ -152,6 +166,7 @@
                 generatedUrlInput.value = hostingUrl;
                 urlOutputContainer.classList.remove('hidden');
 
+                // Auto-copy the URL
                 generatedUrlInput.select();
                 document.execCommand('copy');
                 showMessage(`Link generated and copied! Content expires in ${durationDays} days.`, 'success');
@@ -177,6 +192,7 @@
                 outputTitle.textContent = `Loading Content ID: ${docId}`;
 
                 try {
+                    // Fetch from public collection
                     const collectionPath = `artifacts/${appId}/public/data/hosted_files`;
                     const docRef = doc(db, collectionPath, docId);
                     const docSnap = await getDoc(docRef);
@@ -214,10 +230,10 @@
             // Start Firebase initialization
             initializeFirebase();
             
-            const uploadButton = document.getElementById('upload-button');
             const copyUrlButton = document.getElementById('copy-url-button');
             const generatedUrlInput = document.getElementById('generated-url');
 
+            // Attach event listener after the button variable is assigned globally
             if (uploadButton) {
                 uploadButton.addEventListener('click', uploadAndGenerateLink);
             }
@@ -232,6 +248,11 @@
 
     </script>
     <style>
+        .text-primary { color: #4f46e5; }
+        .bg-background { background-color: #1f2937; }
+        .bg-surface { background-color: #374151; }
+        .text-text-light { color: #f3f4f6; }
+
         html, body {
             height: 100%;
             margin: 0;
@@ -251,13 +272,11 @@
         #iframe-wrapper {
             height: 100%;
         }
-        .bg-background { background-color: #1f2937; }
-        .bg-surface { background-color: #374151; }
     </style>
 </head>
 <body class="bg-background text-text-light">
-    <!-- Message for Firebase error during initialization -->
-    <div id="error-message" class="fixed top-0 left-0 right-0 p-3 bg-red-900 text-red-100 text-center hidden"></div>
+    <!-- Fixed Error Message Area -->
+    <div id="error-message" class="fixed top-0 left-0 right-0 p-3 bg-red-900 text-red-100 text-center text-sm font-medium hidden z-50"></div>
 
     <!-- Main content container -->
     <div id="main-content" class="p-4 sm:p-8 flex flex-col space-y-8">
@@ -290,8 +309,9 @@
                     </select>
                 </div>
 
-                <button id="upload-button" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-green-900/50">
-                    Upload & Generate Permanent Link
+                <!-- Initial state is disabled to prevent race condition -->
+                <button id="upload-button" disabled class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-green-900/50 opacity-50 cursor-not-allowed">
+                    Initializing Database...
                 </button>
 
                 <!-- Output: Generated URL -->
