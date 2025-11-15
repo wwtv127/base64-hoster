@@ -31,8 +31,9 @@
             margin: 0;
             padding: 0;
             font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s; /* Smooth transition for host mode */
         }
-        #app-container {
+        #main-content {
             min-height: 100vh;
         }
         /* Style for the rendered content iframe */
@@ -42,59 +43,67 @@
             border: none;
             background-color: white; /* Important: The hosted content will display here */
         }
+        /* Ensures the iframe wrapper maintains aspect for full height */
+        #iframe-wrapper {
+            height: 100%;
+        }
     </style>
 </head>
 <body class="bg-background text-text-light">
-    <div id="app-container" class="p-4 sm:p-8 flex flex-col space-y-8">
+    <!-- Main content container. Its classes are modified in host mode. -->
+    <div id="main-content" class="p-4 sm:p-8 flex flex-col space-y-8">
 
-        <!-- Header and Instructions -->
-        <header class="text-center">
-            <h1 class="text-4xl font-extrabold text-primary">Base64 Hosted Content Renderer</h1>
-            <p class="mt-2 text-surface-light text-lg">Decode and render HTML content directly from a URL parameter.</p>
-        </header>
+        <!-- UI Controls Wrapper (Hidden in host mode) -->
+        <div id="app-controls">
+            <!-- Header and Instructions -->
+            <header class="text-center">
+                <h1 class="text-4xl font-extrabold text-primary">Base64 Hosted Content Renderer</h1>
+                <p class="mt-2 text-surface-light text-lg">Decode and render HTML content directly from a URL parameter.</p>
+            </header>
 
-        <!-- Control Panel -->
-        <div class="bg-surface p-6 rounded-xl shadow-2xl space-y-4">
-            <h2 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-2">Control Panel</h2>
+            <!-- Control Panel -->
+            <div class="bg-surface p-6 rounded-xl shadow-2xl space-y-4">
+                <h2 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-2">Control Panel</h2>
 
-            <!-- Input: Raw HTML for Encoding/Testing -->
-            <div>
-                <label for="raw-html-input" class="block text-sm font-medium mb-1">1. Enter Raw HTML to Host:</label>
-                <textarea id="raw-html-input" rows="5" placeholder="Example: <h1>Hello World!</h1><p>This is hosted via a URL parameter.</p>" class="w-full p-3 rounded-lg bg-gray-700 text-text-light border-gray-600 focus:ring-primary focus:border-primary"></textarea>
-            </div>
+                <!-- Input: Raw HTML for Encoding/Testing -->
+                <div>
+                    <label for="raw-html-input" class="block text-sm font-medium mb-1">1. Enter Raw HTML to Host:</label>
+                    <textarea id="raw-html-input" rows="5" placeholder="Example: <h1>Hello World!</h1><p>This is hosted via a URL parameter.</p>" class="w-full p-3 rounded-lg bg-gray-700 text-text-light border-gray-600 focus:ring-primary focus:border-primary"></textarea>
+                </div>
 
-            <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-                <button id="encode-button" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-green-900/50">
-                    Encode & Generate URL
-                </button>
-                <button id="render-button" class="flex-1 bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-primary-dark/50">
-                    Render Content Below (from Input)
-                </button>
-            </div>
-
-            <!-- Output: Generated URL -->
-            <div id="url-output-container" class="mt-4 hidden">
-                <label for="generated-url" class="block text-sm font-medium mb-1">2. Generated Hosting URL (Click to Copy):</label>
-                <div class="relative">
-                    <input type="text" id="generated-url" readonly class="w-full p-3 pr-12 rounded-lg bg-gray-800 text-yellow-300 font-mono text-sm border-gray-600">
-                    <button id="copy-url-button" class="absolute inset-y-0 right-0 p-3 text-gray-400 hover:text-white transition" title="Copy URL">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v2" />
-                        </svg>
+                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                    <button id="encode-button" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-green-900/50">
+                        Encode & Generate URL
+                    </button>
+                    <button id="render-button" class="flex-1 bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-primary-dark/50">
+                        Render Content Below (from Input)
                     </button>
                 </div>
-                <p class="text-xs mt-1 text-gray-400">Share this URL to host your Base64 HTML.</p>
+
+                <!-- Output: Generated URL -->
+                <div id="url-output-container" class="mt-4 hidden">
+                    <label for="generated-url" class="block text-sm font-medium mb-1">2. Generated Hosting URL (Click to Copy):</label>
+                    <div class="relative">
+                        <input type="text" id="generated-url" readonly class="w-full p-3 pr-12 rounded-lg bg-gray-800 text-yellow-300 font-mono text-sm border-gray-600">
+                        <button id="copy-url-button" class="absolute inset-y-0 right-0 p-3 text-gray-400 hover:text-white transition" title="Copy URL">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v2" />
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-xs mt-1 text-gray-400">Share this URL to host your Base64 HTML.</p>
+                </div>
+
+                <!-- Message Box -->
+                <div id="message-box" class="mt-4 text-center p-3 rounded-lg hidden" role="alert"></div>
+
             </div>
-
-            <!-- Message Box -->
-            <div id="message-box" class="mt-4 text-center p-3 rounded-lg hidden" role="alert"></div>
-
         </div>
 
-        <!-- Rendered Output Area -->
-        <div class="flex-1 bg-white p-2 rounded-xl shadow-2xl flex flex-col overflow-hidden">
-            <h2 class="text-xl font-semibold text-gray-800 mb-2">3. Rendered Hosted Content:</h2>
-            <div class="flex-1 min-h-[400px] border border-gray-300 rounded-lg overflow-hidden">
+        <!-- Rendered Output Area (Expands to fill viewport in host mode) -->
+        <div id="rendered-output-area" class="flex-1 bg-white p-2 rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <h2 id="output-title" class="text-xl font-semibold text-gray-800 mb-2">3. Rendered Hosted Content:</h2>
+            <div id="iframe-wrapper" class="flex-1 border border-gray-300 rounded-lg overflow-hidden">
                 <iframe id="content-iframe"></iframe>
             </div>
         </div>
@@ -109,13 +118,20 @@
         const copyUrlButton = document.getElementById('copy-url-button');
         const iframe = document.getElementById('content-iframe');
         const messageBox = document.getElementById('message-box');
+        
+        // New elements for control
+        const mainContent = document.getElementById('main-content');
+        const appControls = document.getElementById('app-controls');
+        const renderedOutputArea = document.getElementById('rendered-output-area');
+        const outputTitle = document.getElementById('output-title');
+        const iframeWrapper = document.getElementById('iframe-wrapper');
 
         // --- Utility Functions ---
 
         /** Shows a temporary message in the message box. */
         function showMessage(text, type = 'info') {
             messageBox.textContent = text;
-            messageBox.classList.remove('hidden', 'bg-red-900', 'bg-yellow-900', 'text-red-300', 'text-yellow-300');
+            messageBox.classList.remove('hidden', 'bg-red-900', 'bg-yellow-900', 'text-red-300', 'text-yellow-300', 'bg-green-900', 'text-green-300');
             if (type === 'error') {
                 messageBox.classList.add('bg-red-900', 'text-red-300');
             } else if (type === 'success') {
@@ -131,13 +147,17 @@
         /** Decodes Base64 and renders the HTML in the iframe's srcdoc. */
         function renderContent(base64Code) {
             if (!base64Code) {
-                showMessage("No Base64 code provided to render.", 'error');
+                // Content to display when no code is provided
                 iframe.srcdoc = `
-                    <div style="padding: 20px; text-align: center; font-family: sans-serif;">
-                        <h1 style="color: #ef4444;">No Content Loaded</h1>
-                        <p style="color: #6b7280;">Encode your HTML or provide the 'code' parameter in the URL.</p>
+                    <div style="padding: 20px; text-align: center; font-family: sans-serif; color: #374151;">
+                        <h1 style="color: #4f46e5;">Host Mode Initialized</h1>
+                        <p>No 'code' parameter found in the URL. Use the control panel above to generate a hosting link.</p>
                     </div>
                 `;
+                // Show this message only in non-host mode
+                if (!window.location.search.includes('code=')) {
+                    showMessage("No Base64 code provided. Use the control panel to generate a URL.", 'info');
+                }
                 return;
             }
 
@@ -148,16 +168,19 @@
                 // Load the decoded content into the iframe's sandbox
                 iframe.srcdoc = decodedHtml;
 
-                showMessage("Content rendered successfully!", 'success');
+                // Only show success message if not in host mode (i.e., when clicked via the render button)
+                if (!window.location.search.includes('code=')) {
+                    showMessage("Content rendered successfully!", 'success');
+                }
 
             } catch (e) {
                 console.error("Decoding error:", e);
+                // The error display is handled within the iframe's srcdoc in both modes
                 showMessage("Error decoding Base64 code: Invalid format.", 'error');
                 iframe.srcdoc = `
-                    <div style="padding: 20px; text-align: center; font-family: sans-serif;">
+                    <div style="padding: 20px; text-align: center; font-family: sans-serif; color: #374151;">
                         <h1 style="color: #ef4444;">Decoding Failed</h1>
-                        <p style="color: #6b7280;">The Base64 string is invalid. Check the URL parameter.</p>
-                        <pre style="text-align: left; background-color: #f3f4f6; padding: 10px; border-radius: 5px; overflow-x: auto;">${base64Code}</pre>
+                        <p style="color: #6b7280;">The Base64 string is invalid or corrupted.</p>
                     </div>
                 `;
             }
@@ -227,10 +250,35 @@
             const base64Code = urlParams.get('code');
 
             if (base64Code) {
-                // If 'code' parameter is present, automatically render it
+                // If 'code' parameter is present, automatically render it AND enter host mode
                 renderContent(base64Code);
+
+                // ** HOST MODE ACTIVATION: Hide UI and make content full screen **
+
+                // 1. Hide the control panel
+                appControls.classList.add('hidden');
+
+                // 2. Change body background and remove padding/margin
+                document.body.classList.remove('bg-background', 'text-text-light');
+                document.body.classList.add('bg-white'); // Default to white for hosted content background
+
+                // 3. Reset main wrapper styles for full screen
+                mainContent.classList.remove('p-4', 'sm:p-8', 'space-y-8', 'min-h-screen');
+                mainContent.classList.add('h-screen', 'w-full', 'p-0');
+
+                // 4. Adjust the output area to be full screen
+                renderedOutputArea.classList.remove('bg-white', 'p-2', 'rounded-xl', 'shadow-2xl');
+                renderedOutputArea.classList.add('w-full', 'h-full', 'p-0', 'm-0', 'flex', 'flex-col');
+
+                // 5. Hide the title inside the rendered area
+                outputTitle.classList.add('hidden');
+
+                // 6. Remove borders/padding from iframe wrapper
+                iframeWrapper.classList.remove('border', 'border-gray-300', 'rounded-lg');
+                iframeWrapper.classList.add('h-full');
+
             } else {
-                // No 'code' parameter, show initial instructions
+                // No 'code' parameter, stay in app mode and show initial message
                 renderContent(null);
             }
         });
