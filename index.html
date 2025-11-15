@@ -14,7 +14,12 @@
 
         // Global variables provided by the environment
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        let firebaseConfig = {};
+        try {
+             firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        } catch (e) {
+             console.error("Error parsing __firebase_config:", e);
+        }
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
         // Set Firebase logging for debugging
@@ -29,8 +34,9 @@
         // Function to initialize Firebase and authenticate
         async function initializeFirebase() {
             try {
+                // Check if the critical piece of config data is present
                 if (!Object.keys(firebaseConfig).length || !firebaseConfig.projectId) {
-                    throw new Error("Firebase configuration is missing or incomplete.");
+                    throw new Error("Firebase configuration object is empty or missing 'projectId'. Cannot connect to the database.");
                 }
                 
                 const app = initializeApp(firebaseConfig);
