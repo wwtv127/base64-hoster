@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base64 HTML Hoster</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#4f46e5',
+                        'primary-dark': '#4338ca',
+                        'background': '#1f2937',
+                        'surface': '#374151',
+                        'text-light': '#f3f4f6',
+                    },
+                },
+                fontFamily: {
+                    sans: ['Inter', 'sans-serif'],
+                },
+            }
+        }
+    </script>
+    <style>
+        /* Ensures the iframe and main content expand correctly */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+        #app-container {
+            min-height: 100vh;
+        }
+        /* Style for the rendered content iframe */
+        #content-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: white; /* Important: The hosted content will display here */
+        }
+    </style>
+</head>
+<body class="bg-background text-text-light">
+    <div id="app-container" class="p-4 sm:p-8 flex flex-col space-y-8">
+
+        <!-- Header and Instructions -->
+        <header class="text-center">
+            <h1 class="text-4xl font-extrabold text-primary">Base64 Hosted Content Renderer</h1>
+            <p class="mt-2 text-surface-light text-lg">Decode and render HTML content directly from a URL parameter.</p>
+        </header>
+
+        <!-- Control Panel -->
+        <div class="bg-surface p-6 rounded-xl shadow-2xl space-y-4">
+            <h2 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-2">Control Panel</h2>
+
+            <!-- Input: Raw HTML for Encoding/Testing -->
+            <div>
+                <label for="raw-html-input" class="block text-sm font-medium mb-1">1. Enter Raw HTML to Host:</label>
+                <textarea id="raw-html-input" rows="5" placeholder="Example: <h1>Hello World!</h1><p>This is hosted via a URL parameter.</p>" class="w-full p-3 rounded-lg bg-gray-700 text-text-light border-gray-600 focus:ring-primary focus:border-primary"></textarea>
+            </div>
+
+            <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                <button id="encode-button" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-green-900/50">
+                    Encode & Generate URL
+                </button>
+                <button id="render-button" class="flex-1 bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-primary-dark/50">
+                    Render Content Below (from Input)
+                </button>
+            </div>
+
+            <!-- Output: Generated URL -->
+            <div id="url-output-container" class="mt-4 hidden">
+                <label for="generated-url" class="block text-sm font-medium mb-1">2. Generated Hosting URL (Click to Copy):</label>
+                <div class="relative">
+                    <input type="text" id="generated-url" readonly class="w-full p-3 pr-12 rounded-lg bg-gray-800 text-yellow-300 font-mono text-sm border-gray-600">
+                    <button id="copy-url-button" class="absolute inset-y-0 right-0 p-3 text-gray-400 hover:text-white transition" title="Copy URL">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v2" />
+                        </svg>
+                    </button>
+                </div>
+                <p class="text-xs mt-1 text-gray-400">Share this URL to host your Base64 HTML.</p>
+            </div>
+
+            <!-- Message Box -->
+            <div id="message-box" class="mt-4 text-center p-3 rounded-lg hidden" role="alert"></div>
+
+        </div>
+
+        <!-- Rendered Output Area -->
+        <div class="flex-1 bg-white p-2 rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-2">3. Rendered Hosted Content:</h2>
+            <div class="flex-1 min-h-[400px] border border-gray-300 rounded-lg overflow-hidden">
+                <iframe id="content-iframe"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const rawHtmlInput = document.getElementById('raw-html-input');
+        const renderButton = document.getElementById('render-button');
+        const encodeButton = document.getElementById('encode-button');
+        const generatedUrlInput = document.getElementById('generated-url');
+        const urlOutputContainer = document.getElementById('url-output-container');
+        const copyUrlButton = document.getElementById('copy-url-button');
+        const iframe = document.getElementById('content-iframe');
+        const messageBox = document.getElementById('message-box');
+
+        // --- Utility Functions ---
+
+        /** Shows a temporary message in the message box. */
+        function showMessage(text, type = 'info') {
+            messageBox.textContent = text;
+            messageBox.classList.remove('hidden', 'bg-red-900', 'bg-yellow-900', 'text-red-300', 'text-yellow-300');
+            if (type === 'error') {
+                messageBox.classList.add('bg-red-900', 'text-red-300');
+            } else if (type === 'success') {
+                 messageBox.classList.add('bg-green-900', 'text-green-300');
+            } else { // info
+                messageBox.classList.add('bg-yellow-900', 'text-yellow-300');
+            }
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
+        }
+
+        /** Decodes Base64 and renders the HTML in the iframe's srcdoc. */
+        function renderContent(base64Code) {
+            if (!base64Code) {
+                showMessage("No Base64 code provided to render.", 'error');
+                iframe.srcdoc = `
+                    <div style="padding: 20px; text-align: center; font-family: sans-serif;">
+                        <h1 style="color: #ef4444;">No Content Loaded</h1>
+                        <p style="color: #6b7280;">Encode your HTML or provide the 'code' parameter in the URL.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                // Decode the Base64 string
+                const decodedHtml = atob(base64Code);
+
+                // Load the decoded content into the iframe's sandbox
+                iframe.srcdoc = decodedHtml;
+
+                showMessage("Content rendered successfully!", 'success');
+
+            } catch (e) {
+                console.error("Decoding error:", e);
+                showMessage("Error decoding Base64 code: Invalid format.", 'error');
+                iframe.srcdoc = `
+                    <div style="padding: 20px; text-align: center; font-family: sans-serif;">
+                        <h1 style="color: #ef4444;">Decoding Failed</h1>
+                        <p style="color: #6b7280;">The Base64 string is invalid. Check the URL parameter.</p>
+                        <pre style="text-align: left; background-color: #f3f4f6; padding: 10px; border-radius: 5px; overflow-x: auto;">${base64Code}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        // --- Event Handlers ---
+
+        /** Encodes the input HTML and generates the hosting URL. */
+        encodeButton.addEventListener('click', () => {
+            const rawHtml = rawHtmlInput.value.trim();
+            if (!rawHtml) {
+                showMessage("Please enter some HTML content first.", 'error');
+                return;
+            }
+
+            try {
+                // 1. Encode the raw HTML to Base64
+                const base64Code = btoa(rawHtml);
+
+                // 2. Get the current page's URL base
+                const baseUrl = window.location.origin + window.location.pathname;
+
+                // 3. Construct the full hosting URL
+                const hostingUrl = `${baseUrl}?code=${encodeURIComponent(base64Code)}`;
+
+                // 4. Update the UI
+                generatedUrlInput.value = hostingUrl;
+                urlOutputContainer.classList.remove('hidden');
+
+                // Auto-copy the URL for convenience
+                generatedUrlInput.select();
+                document.execCommand('copy');
+                showMessage("URL generated and copied to clipboard!", 'success');
+
+            } catch (e) {
+                console.error("Encoding error:", e);
+                showMessage("An error occurred during encoding.", 'error');
+            }
+        });
+
+        /** Renders the HTML directly from the text area input (for immediate testing). */
+        renderButton.addEventListener('click', () => {
+            const rawHtml = rawHtmlInput.value.trim();
+            if (!rawHtml) {
+                showMessage("Please enter some HTML content first to render.", 'error');
+                return;
+            }
+            try {
+                const base64Code = btoa(rawHtml); // Encode first
+                renderContent(base64Code);
+            } catch (e) {
+                showMessage("Error processing input.", 'error');
+            }
+        });
+
+        /** Copies the generated URL to the clipboard. */
+        copyUrlButton.addEventListener('click', () => {
+            generatedUrlInput.select();
+            document.execCommand('copy');
+            showMessage("Hosting URL copied to clipboard!", 'success');
+        });
+
+        // --- Initialization: Check for URL Parameter on Load ---
+
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const base64Code = urlParams.get('code');
+
+            if (base64Code) {
+                // If 'code' parameter is present, automatically render it
+                renderContent(base64Code);
+            } else {
+                // No 'code' parameter, show initial instructions
+                renderContent(null);
+            }
+        });
+    </script>
+</body>
+</html>
