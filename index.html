@@ -49,10 +49,9 @@
             overflow: hidden;
         }
         .host-mode #main-container {
-            /* Removes p-4/sm:p-8 */
+            /* Removes p-4/sm:p-8 and space-y-8 */
             padding: 0 !important;
             height: 100vh;
-            /* FIX: Explicitly remove margin and spacing utilities from main container when hosting */
             margin: 0 !important; 
             gap: 0 !important;
             --tw-space-y-reverse: 0 !important; 
@@ -73,8 +72,9 @@
         <!-- UI Controls Wrapper (Generator Mode) -->
         <div id="app-controls" class="w-full max-w-4xl">
             <header class="text-center mb-8">
-                <h1 class="text-4xl font-extrabold text-primary-dark">HTML Hoster</h1>
+                <h1 class="text-4xl font-extrabold text-primary-dark">Seamless HTML Hoster</h1>
                 <p class="mt-2 text-lg text-gray-600">Hosts large HTML files with clean URLs and 7-day expiry.</p>
+                <p class="mt-1 text-sm text-gray-500 font-semibold">Backend connected to Supabase project: bqpfmthtuakjlclrnuvd</p>
             </header>
 
             <!-- Control Panel -->
@@ -254,7 +254,6 @@
         const retrieveAndRender = async (contentId) => {
             const iframe = document.getElementById('content-iframe');
             
-            // Check for hardcoded credentials availability (FIX: Explicit check for timing issues)
             if (!SUPABASE_URL || !SUPABASE_KEY) {
                 renderError(iframe, "Configuration Error", "The hardcoded Supabase URL or Key is missing from the script variables. Please check the code.");
                 return;
@@ -264,7 +263,6 @@
             const supabaseKey = SUPABASE_KEY;
             
             try {
-                // Supabase REST API endpoint for retrieving content by ID
                 const apiUrl = `${supabaseUrl}/rest/v1/${API_TABLE}?id=eq.${contentId}&select=content,expires_at`;
                 
                 const response = await fetch(apiUrl, {
@@ -302,9 +300,28 @@
                     renderError(iframe, "Content Expired", `This hosted HTML expired on ${expiresAt.toLocaleDateString()}.`);
                     return;
                 }
+                
+                // FIX: Wrap the hosted content with a minimal HTML structure 
+                // that aggressively resets the inner document's body margin to 0.
+                const contentToRender = `
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Force body margin reset inside the hosted iframe content */
+        body { 
+            margin: 0 !important; 
+            padding: 0 !important; 
+        }
+    </style>
+</head>
+<body>
+    ${record.content}
+</body>
+</html>`;
 
                 // Render the content directly
-                iframe.srcdoc = record.content;
+                iframe.srcdoc = contentToRender;
 
             } catch (e) {
                 console.error("Supabase Retrieval Error:", e);
