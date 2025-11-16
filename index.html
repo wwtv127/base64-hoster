@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supabase HTML Hoster</title>
+    <title>HTML Hoster</title>
     <!-- Load Inter font for aesthetics -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <!-- Load Tailwind CSS -->
@@ -61,33 +61,18 @@
         <!-- UI Controls Wrapper (Generator Mode) -->
         <div id="app-controls" class="w-full max-w-4xl">
             <header class="text-center mb-8">
-                <h1 class="text-4xl font-extrabold text-primary-dark">Supabase HTML Hoster</h1>
-                <p class="mt-2 text-lg text-gray-600">Hosts large HTML files with clean URLs and 7-day expiry using your Supabase project.</p>
-                <p class="mt-1 text-sm text-red-500 font-semibold">SETUP REQUIRED: You must set up a Supabase project and the `hosted_html` table (see instructions).</p>
+                <h1 class="text-4xl font-extrabold text-primary-dark">Seamless HTML Hoster</h1>
+                <p class="mt-2 text-lg text-gray-600">Hosts large HTML files with clean URLs and 7-day expiry.</p>
+                <p class="mt-1 text-sm text-gray-500 font-semibold">Backend connected to Supabase project: bqpfmthtuakjlclrnuvd</p>
             </header>
 
             <!-- Control Panel -->
             <div class="bg-surface p-6 rounded-xl shadow-2xl space-y-6 border border-gray-200">
-                <h2 class="text-2xl font-semibold border-b border-gray-300 pb-2 text-primary-dark">Supabase Configuration</h2>
-
-                <!-- Supabase Credentials Input -->
-                <div class="space-y-4">
-                    <h3 class="text-lg font-medium text-gray-700">1. Enter Supabase Project Credentials</h3>
-                    <div>
-                        <label for="supabase-url-input" class="block text-sm font-medium mb-1">Supabase Project URL (e.g., `https://xyz123.supabase.co`):</label>
-                        <input type="url" id="supabase-url-input" placeholder="https://xyz123.supabase.co" 
-                               class="w-full p-2 rounded-lg bg-gray-50 border-gray-300 focus:ring-primary focus:border-primary">
-                    </div>
-                    <div>
-                        <label for="supabase-key-input" class="block text-sm font-medium mb-1">Supabase Public Anon Key:</label>
-                        <input type="text" id="supabase-key-input" placeholder="eyJhbGc..." 
-                               class="w-full p-2 rounded-lg bg-gray-50 border-gray-300 focus:ring-primary focus:border-primary">
-                    </div>
-                </div>
+                <h2 class="text-2xl font-semibold border-b border-gray-300 pb-2 text-primary-dark">Upload New Content</h2>
 
                 <!-- Input: Raw HTML for Uploading -->
-                <div class="pt-4 border-t border-gray-100">
-                    <h3 class="text-lg font-medium text-gray-700">2. Enter HTML Content for Hosting</h3>
+                <div class="pt-4">
+                    <h3 class="text-lg font-medium text-gray-700">1. Paste HTML Content for Hosting</h3>
                     <textarea id="raw-html-input" rows="10" placeholder="Paste your full, large HTML content here." 
                               class="w-full p-3 rounded-lg bg-gray-50 text-text-dark border-gray-300 focus:ring-primary focus:border-primary mt-2"></textarea>
                     <p class="text-xs text-gray-500 mt-1">Content will automatically expire after 7 days.</p>
@@ -103,7 +88,7 @@
 
                 <!-- Output: Generated URL -->
                 <div id="url-output-container" class="mt-4 pt-4 border-t border-gray-100 hidden">
-                    <label for="generated-url" class="block text-sm font-medium mb-1 text-gray-700">3. Generated Hosting URL (Click to Copy):</label>
+                    <label for="generated-url" class="block text-sm font-medium mb-1 text-gray-700">2. Generated Hosting URL (Click to Copy):</label>
                     <div class="relative">
                         <input type="text" id="generated-url" readonly class="w-full p-3 pr-12 rounded-lg bg-gray-100 text-green-700 font-mono text-sm border border-green-300 shadow-inner">
                         <button id="copy-url-button" onclick="copyUrl()" class="absolute inset-y-0 right-0 p-3 text-gray-500 hover:text-primary-dark transition" title="Copy URL">
@@ -124,6 +109,12 @@
     </div>
 
     <script type="text/javascript">
+        // --- HARDCODED SUPABASE CREDENTIALS ---
+        // These are used automatically for all API calls.
+        const SUPABASE_URL = "https://bqpfmthtuakjlclrnuvd.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxcGZtdGh0dWFramxjbHJudXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzI1ODYsImV4cCI6MjA3ODgwODU4Nn0.jyTCMctVrM_Lt0UjREDFoSjMuT5YoG3tr6Wc-mPGkBE";
+        const API_TABLE = 'hosted_html';
+        
         // Utility functions
         const showMessage = (text, type = 'info') => {
             const messageBox = document.getElementById('message-box');
@@ -151,7 +142,7 @@
         };
 
         const generateId = () => {
-            // Generates a short ID for the URL hash
+            // Generates a short, clean ID for the URL hash
             return Math.random().toString(36).substring(2, 10); 
         };
 
@@ -159,7 +150,7 @@
              iframe.srcdoc = `<div style="padding: 32px; text-align: center; font-family: 'Inter', sans-serif; color: #ef4444; background: #fef2f2; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
                 <h1 style="font-size: 1.8rem; font-weight: 700; color: #b91c1c;">Host Error: ${title}</h1>
                 <p style="color: #4b5563; margin-top: 10px; max-width: 600px;">${message}</p>
-                <p style="color: #4b5563; margin-top: 20px; font-size: 0.8rem;">Check your browser console for detailed error information.</p>
+                <p style="color: #4b5563; margin-top: 20px; font-size: 0.8rem;">Ensure your Supabase project is set up correctly with the 'hosted_html' table and RLS policies.</p>
             </div>`;
         };
 
@@ -170,26 +161,23 @@
             const now = new Date();
             // Add 7 days in milliseconds
             now.setDate(now.getDate() + 7); 
-            // Return ISO 8601 format required by Supabase (e.g., 2024-11-15T10:00:00.000Z)
+            // Return ISO 8601 format required by Supabase
             return now.toISOString();
         };
 
         /** Uploads the content to Supabase. */
         const uploadAndGenerateLink = async () => {
             const rawHtmlInput = document.getElementById('raw-html-input');
-            const urlInput = document.getElementById('supabase-url-input');
-            const keyInput = document.getElementById('supabase-key-input');
-            
             const generatedUrlInput = document.getElementById('generated-url');
             const urlOutputContainer = document.getElementById('url-output-container');
             const generateButton = document.getElementById('generate-button');
             
             const rawHtml = rawHtmlInput.value.trim();
-            const supabaseUrl = urlInput.value.trim().replace(/\/+$/, '');
-            const supabaseKey = keyInput.value.trim();
+            const supabaseUrl = SUPABASE_URL.replace(/\/+$/, '');
+            const supabaseKey = SUPABASE_KEY;
 
-            if (!rawHtml || !supabaseUrl || !supabaseKey) {
-                showMessage("Please enter HTML content and both Supabase credentials.", 'error');
+            if (!rawHtml) {
+                showMessage("Please enter HTML content before attempting to upload.", 'error');
                 return;
             }
 
@@ -202,7 +190,7 @@
 
             try {
                 // Supabase REST API endpoint for the 'hosted_html' table
-                const apiUrl = `${supabaseUrl}/rest/v1/hosted_html`;
+                const apiUrl = `${supabaseUrl}/rest/v1/${API_TABLE}`;
 
                 const payload = { 
                     id: contentId,
@@ -215,18 +203,16 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'apikey': supabaseKey,
-                        // Authorization header is needed if RLS is enabled and set to 'authenticated' or similar, 
-                        // but for 'public anon' key it often requires 'Bearer [key]'
                         'Authorization': `Bearer ${supabaseKey}`,
                         'Prefer': 'return=minimal' // Reduces payload size
                     },
                     body: JSON.stringify(payload)
                 });
                 
-                if (response.status !== 201) { // 201 Created is the expected response for insert
+                if (response.status !== 201) { 
                     let errorText = await response.text();
                     console.error("Supabase API Error Response:", errorText);
-                    throw new Error(`Supabase upload failed with status ${response.status}. Check your RLS policy and table name (should be hosted_html).`);
+                    throw new Error(`Supabase upload failed with status ${response.status}. Ensure RLS is configured to allow inserts.`);
                 }
                 
                 // Construct the clean hosting URL using the hash fragment
@@ -256,20 +242,12 @@
         /** Fetches content from Supabase by ID and renders it. */
         const retrieveAndRender = async (contentId) => {
             const iframe = document.getElementById('content-iframe');
-            const urlInput = document.getElementById('supabase-url-input');
-            const keyInput = document.getElementById('supabase-key-input');
+            const supabaseUrl = SUPABASE_URL.replace(/\/+$/, '');
+            const supabaseKey = SUPABASE_KEY;
             
-            const supabaseUrl = urlInput.value.trim().replace(/\/+$/, '');
-            const supabaseKey = keyInput.value.trim();
-            
-            if (!supabaseUrl || !supabaseKey) {
-                renderError(iframe, "Configuration Missing", "Supabase credentials are required to retrieve content. Please input your Project URL and Key in the fields above.");
-                return;
-            }
-
             try {
                 // Supabase REST API endpoint for retrieving content by ID
-                const apiUrl = `${supabaseUrl}/rest/v1/hosted_html?id=eq.${contentId}&select=content,expires_at`;
+                const apiUrl = `${supabaseUrl}/rest/v1/${API_TABLE}?id=eq.${contentId}&select=content,expires_at`;
                 
                 const response = await fetch(apiUrl, {
                     method: 'GET',
@@ -280,8 +258,8 @@
                     },
                 });
 
-                if (response.status === 404 || response.status === 400) {
-                    renderError(iframe, "Content Not Found", "The link is expired, the content ID is invalid, or RLS is blocking the read operation.");
+                if (response.status === 404) {
+                    renderError(iframe, "Content Not Found", "The link is invalid or the content ID does not exist.");
                     return;
                 }
 
@@ -294,7 +272,7 @@
                 const data = await response.json();
 
                 if (!data || data.length === 0) {
-                    renderError(iframe, "Content Not Found", "The link is invalid or the content has expired.");
+                    renderError(iframe, "Content Not Found", "The link is invalid or the content has been deleted.");
                     return;
                 }
                 
@@ -312,7 +290,7 @@
 
             } catch (e) {
                 console.error("Supabase Retrieval Error:", e);
-                renderError(iframe, "Retrieval Failed", `Error connecting to Supabase: ${e.message}. Check your console for details and ensure your credentials and RLS are correct.`);
+                renderError(iframe, "Retrieval Failed", `Error connecting to Supabase: ${e.message}.`);
             }
         };
 
