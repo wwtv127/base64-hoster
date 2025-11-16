@@ -27,13 +27,30 @@
         }
     </script>
     <style>
-        /* FIX: Use !important to strongly ensure zero margin/padding on root elements */
-        html, body {
-            height: 100%;
+        /* FIX 3: Universal aggressive reset for host page to eliminate browser defaults */
+        .host-mode *, 
+        .host-mode html, 
+        .host-mode body {
             margin: 0 !important;
             padding: 0 !important;
-            overflow: auto;
+            box-sizing: border-box;
         }
+
+        /* Base styles for the outer page */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: auto;
+            /* Ensure background covers everything by default */
+            background-color: var(--background); 
+        }
+        .host-mode html, .host-mode body {
+            overflow: hidden !important; /* Prevent scrollbar margin/leakage */
+            height: 100vh !important;
+            width: 100vw !important;
+        }
+
         #main-container {
             min-height: 100vh;
             overflow-y: auto; /* Allow scrolling in generator mode */
@@ -44,6 +61,7 @@
             border: none;
             background-color: white;
         }
+        
         /* Host Mode: Content takes up the full screen */
         .host-mode {
             overflow: hidden;
