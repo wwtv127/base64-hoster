@@ -3,31 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Persistent HTML Hoster (Firestore)</title>
-    <!-- Load Firebase Modules (Must be imported with type="module" in a script block) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Setting Firebase variables globally for access later
-        window.firebaseApp = null;
-        window.db = null;
-        window.auth = null;
-        window.userId = null;
-        window.isAuthReady = false;
+    <title>Supabase HTML Hoster</title>
+    <!-- Load Inter font for aesthetics -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#34d399', /* Emerald-400 for Supabase feel */
+                        'primary-dark': '#059669', /* Emerald-600 */
+                        'background': '#f9fafb', /* Gray-50 */
+                        'surface': '#ffffff', /* White */
+                        'text-dark': '#1f2937', /* Gray-900 */
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: auto;
+        }
+        #main-container {
+            min-height: 100vh;
+        }
+        #content-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: white;
+        }
+        /* Host Mode: Content takes up the full screen */
+        .host-mode {
+            overflow: hidden;
+        }
+        .host-mode #main-container {
+            padding: 0 !important;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body class="bg-background text-text-dark">
 
-        // Constants for Firestore paths
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const COLLECTION_PATH = `/artifacts/${appId}/public/data/hosted_content`;
-        
-        // Utility for displaying messages
+    <div id="message-box" class="fixed top-0 left-1/2 -translate-x-1/2 mt-4 p-3 rounded-xl shadow-xl text-sm font-medium z-50 min-w-[300px] text-center hidden" role="alert"></div>
+
+    <div id="main-container" class="p-4 sm:p-8 flex flex-col items-center justify-start space-y-8">
+
+        <!-- UI Controls Wrapper (Generator Mode) -->
+        <div id="app-controls" class="w-full max-w-4xl">
+            <header class="text-center mb-8">
+                <h1 class="text-4xl font-extrabold text-primary-dark">Supabase HTML Hoster</h1>
+                <p class="mt-2 text-lg text-gray-600">Hosts large HTML files with clean URLs and 7-day expiry using your Supabase project.</p>
+                <p class="mt-1 text-sm text-red-500 font-semibold">SETUP REQUIRED: You must set up a Supabase project and the `hosted_html` table (see instructions).</p>
+            </header>
+
+            <!-- Control Panel -->
+            <div class="bg-surface p-6 rounded-xl shadow-2xl space-y-6 border border-gray-200">
+                <h2 class="text-2xl font-semibold border-b border-gray-300 pb-2 text-primary-dark">Supabase Configuration</h2>
+
+                <!-- Supabase Credentials Input -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-medium text-gray-700">1. Enter Supabase Project Credentials</h3>
+                    <div>
+                        <label for="supabase-url-input" class="block text-sm font-medium mb-1">Supabase Project URL (e.g., `https://xyz123.supabase.co`):</label>
+                        <input type="url" id="supabase-url-input" placeholder="https://xyz123.supabase.co" 
+                               class="w-full p-2 rounded-lg bg-gray-50 border-gray-300 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div>
+                        <label for="supabase-key-input" class="block text-sm font-medium mb-1">Supabase Public Anon Key:</label>
+                        <input type="text" id="supabase-key-input" placeholder="eyJhbGc..." 
+                               class="w-full p-2 rounded-lg bg-gray-50 border-gray-300 focus:ring-primary focus:border-primary">
+                    </div>
+                </div>
+
+                <!-- Input: Raw HTML for Uploading -->
+                <div class="pt-4 border-t border-gray-100">
+                    <h3 class="text-lg font-medium text-gray-700">2. Enter HTML Content for Hosting</h3>
+                    <textarea id="raw-html-input" rows="10" placeholder="Paste your full, large HTML content here." 
+                              class="w-full p-3 rounded-lg bg-gray-50 text-text-dark border-gray-300 focus:ring-primary focus:border-primary mt-2"></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Content will automatically expire after 7 days.</p>
+                </div>
+                
+                <!-- Upload Button -->
+                <button 
+                    id="generate-button" 
+                    onclick="uploadAndGenerateLink()" 
+                    class="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-primary/50 transform hover:scale-[1.01]">
+                    Upload & Generate Permanent Link
+                </button>
+
+                <!-- Output: Generated URL -->
+                <div id="url-output-container" class="mt-4 pt-4 border-t border-gray-100 hidden">
+                    <label for="generated-url" class="block text-sm font-medium mb-1 text-gray-700">3. Generated Hosting URL (Click to Copy):</label>
+                    <div class="relative">
+                        <input type="text" id="generated-url" readonly class="w-full p-3 pr-12 rounded-lg bg-gray-100 text-green-700 font-mono text-sm border border-green-300 shadow-inner">
+                        <button id="copy-url-button" onclick="copyUrl()" class="absolute inset-y-0 right-0 p-3 text-gray-500 hover:text-primary-dark transition" title="Copy URL">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v2" />
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-xs mt-1 text-gray-500">The content is stored in your Supabase database and retrieved using this clean ID.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Iframe for Hosted Content (Visible in Host Mode) -->
+        <div id="host-output" class="w-full h-full flex-1 hidden">
+             <iframe id="content-iframe" title="Hosted Content"></iframe>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // Utility functions
         const showMessage = (text, type = 'info') => {
             const messageBox = document.getElementById('message-box');
             messageBox.textContent = text;
-            messageBox.className = 'fixed top-0 left-1/2 -translate-x-1/2 mt-4 p-3 rounded-lg shadow-lg text-sm font-medium z-50 min-w-[300px] text-center';
-            messageBox.classList.remove('hidden', 'bg-red-200', 'bg-green-200', 'text-red-800', 'text-green-800');
+            messageBox.className = 'fixed top-0 left-1/2 -translate-x-1/2 mt-4 p-3 rounded-xl shadow-xl text-sm font-medium z-50 min-w-[300px] text-center transition-all duration-300';
+            messageBox.classList.remove('hidden', 'bg-red-200', 'bg-green-200', 'bg-yellow-200', 'text-red-800', 'text-green-800', 'text-yellow-800');
             
             if (type === 'error') {
                 messageBox.classList.add('bg-red-200', 'text-red-800');
@@ -40,321 +142,211 @@
                 messageBox.classList.add('hidden');
             }, 5000);
         };
-        window.showMessage = showMessage; // Make accessible globally
+        
+        const copyUrl = () => {
+            const generatedUrlInput = document.getElementById('generated-url');
+            generatedUrlInput.select();
+            document.execCommand('copy'); 
+            showMessage("Hosting URL copied to clipboard!", 'success');
+        };
 
-        // Core initialization function
-        const initializeFirebase = async () => {
-            const generateButton = document.getElementById('generate-button');
-            try {
-                // Set debug logging
-                setLogLevel('debug'); 
-                
-                // 1. Load Config
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                
-                if (!firebaseConfig || !firebaseConfig.projectId) {
-                    throw new Error("Firebase configuration object is empty or missing 'projectId'. Cannot connect to the database.");
-                }
+        const generateId = () => {
+            // Generates a short ID for the URL hash
+            return Math.random().toString(36).substring(2, 10); 
+        };
 
-                // 2. Initialize App
-                window.firebaseApp = initializeApp(firebaseConfig);
-                window.db = getFirestore(window.firebaseApp);
-                window.auth = getAuth(window.firebaseApp);
-
-                // 3. Authenticate
-                if (typeof __initial_auth_token !== 'undefined') {
-                    await signInWithCustomToken(window.auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(window.auth);
-                }
-                
-                window.userId = window.auth.currentUser?.uid || crypto.randomUUID();
-                window.isAuthReady = true;
-
-                // 4. Update UI
-                console.log(`Firebase initialized. User ID: ${window.userId}`);
-                generateButton.textContent = 'Upload & Generate Permanent Link';
-                generateButton.disabled = false;
-                generateButton.classList.remove('opacity-50', 'cursor-not-allowed');
-
-            } catch (e) {
-                console.error("Initialization failed. Error:", e);
-                showMessage(`Initialization failed. Error: ${e.message}`, 'error');
-                generateButton.textContent = 'Database Initialization Failed';
-                generateButton.disabled = true;
-            }
+        const renderError = (iframe, title, message) => {
+             iframe.srcdoc = `<div style="padding: 32px; text-align: center; font-family: 'Inter', sans-serif; color: #ef4444; background: #fef2f2; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                <h1 style="font-size: 1.8rem; font-weight: 700; color: #b91c1c;">Host Error: ${title}</h1>
+                <p style="color: #4b5563; margin-top: 10px; max-width: 600px;">${message}</p>
+                <p style="color: #4b5563; margin-top: 20px; font-size: 0.8rem;">Check your browser console for detailed error information.</p>
+            </div>`;
         };
 
         // --- Core Functions for Upload and Retrieval ---
 
-        /** Generates a short, random ID */
-        const generateId = () => Math.random().toString(36).substring(2, 9); // 7 character alphanumeric
+        /** Calculates the expiry date 7 days from now and formats it for Supabase (ISO 8601). */
+        const getExpiryTimestamp = () => {
+            const now = new Date();
+            // Add 7 days in milliseconds
+            now.setDate(now.getDate() + 7); 
+            // Return ISO 8601 format required by Supabase (e.g., 2024-11-15T10:00:00.000Z)
+            return now.toISOString();
+        };
 
-        /** Uploads the content to Firestore */
-        window.uploadAndGenerateLink = async () => {
-            if (!window.isAuthReady || !window.db) {
-                showMessage("Database is not ready. Please wait for initialization.", 'error');
-                return;
-            }
-
+        /** Uploads the content to Supabase. */
+        const uploadAndGenerateLink = async () => {
             const rawHtmlInput = document.getElementById('raw-html-input');
+            const urlInput = document.getElementById('supabase-url-input');
+            const keyInput = document.getElementById('supabase-key-input');
+            
             const generatedUrlInput = document.getElementById('generated-url');
             const urlOutputContainer = document.getElementById('url-output-container');
             const generateButton = document.getElementById('generate-button');
             
             const rawHtml = rawHtmlInput.value.trim();
+            const supabaseUrl = urlInput.value.trim().replace(/\/+$/, '');
+            const supabaseKey = keyInput.value.trim();
 
-            if (!rawHtml) {
-                showMessage("Please enter some HTML content first.", 'error');
+            if (!rawHtml || !supabaseUrl || !supabaseKey) {
+                showMessage("Please enter HTML content and both Supabase credentials.", 'error');
                 return;
             }
 
             generateButton.disabled = true;
-            generateButton.textContent = 'Uploading...';
+            generateButton.textContent = 'Uploading... (Awaiting Supabase)';
             generateButton.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            const contentId = generateId();
+            const expiryDate = getExpiryTimestamp();
 
             try {
-                // Content preparation
-                const expirationDays = 7;
-                const expirationTime = new Date();
-                expirationTime.setDate(expirationTime.getDate() + expirationDays);
-                
-                // Data to store
-                const hostData = {
-                    content: rawHtml, // Stored directly, no encoding needed
-                    createdAt: new Date().toISOString(),
-                    expiresAt: expirationTime.toISOString(),
-                    userId: window.userId
+                // Supabase REST API endpoint for the 'hosted_html' table
+                const apiUrl = `${supabaseUrl}/rest/v1/hosted_html`;
+
+                const payload = { 
+                    id: contentId,
+                    content: rawHtml,
+                    expires_at: expiryDate
                 };
 
-                // Upload to Firestore and let Firestore generate the ID
-                const docRef = await addDoc(collection(window.db, COLLECTION_PATH), hostData);
-                const docId = docRef.id;
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': supabaseKey,
+                        // Authorization header is needed if RLS is enabled and set to 'authenticated' or similar, 
+                        // but for 'public anon' key it often requires 'Bearer [key]'
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'Prefer': 'return=minimal' // Reduces payload size
+                    },
+                    body: JSON.stringify(payload)
+                });
                 
-                // Construct the clean hosting URL using the hash fragment (preferred for client-side routing)
+                if (response.status !== 201) { // 201 Created is the expected response for insert
+                    let errorText = await response.text();
+                    console.error("Supabase API Error Response:", errorText);
+                    throw new Error(`Supabase upload failed with status ${response.status}. Check your RLS policy and table name (should be hosted_html).`);
+                }
+                
+                // Construct the clean hosting URL using the hash fragment
                 const baseUrl = window.location.origin + window.location.pathname;
-                const hostingUrl = `${baseUrl}#${docId}`;
+                const hostingUrl = `${baseUrl}#${contentId}`;
 
                 // Update the UI
                 generatedUrlInput.value = hostingUrl;
                 urlOutputContainer.classList.remove('hidden');
 
                 // Auto-copy the URL
-                generatedUrlInput.select();
-                document.execCommand('copy');
-                showMessage(`Link generated and copied! Expires in ${expirationDays} days.`, 'success');
+                copyUrl();
+                showMessage(`Success! Content stored until ${new Date(expiryDate).toLocaleDateString()}. Link copied.`, 'success');
 
             } catch (e) {
-                console.error("Firestore Upload Error:", e);
-                showMessage(`Firestore Upload Error: ${e.message}`, 'error');
+                console.error("Supabase Upload Error:", e);
+                showMessage(`Upload Failed: ${e.message}`, 'error');
             } finally {
                 generateButton.disabled = false;
                 generateButton.textContent = 'Upload & Generate Permanent Link';
                 generateButton.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         };
+        window.uploadAndGenerateLink = uploadAndGenerateLink;
 
-        /** Fetches content from Firestore by ID and renders it. */
-        window.retrieveAndRender = async (docId) => {
+
+        /** Fetches content from Supabase by ID and renders it. */
+        const retrieveAndRender = async (contentId) => {
             const iframe = document.getElementById('content-iframe');
+            const urlInput = document.getElementById('supabase-url-input');
+            const keyInput = document.getElementById('supabase-key-input');
             
-            const renderError = (title, message) => {
-                 iframe.srcdoc = `<div style="padding: 20px; text-align: center; font-family: sans-serif; color: #ef4444;">
-                    <h1 style="font-size: 1.5rem;">${title}</h1>
-                    <p style="color: #4b5563;">${message}</p>
-                </div>`;
-            };
+            const supabaseUrl = urlInput.value.trim().replace(/\/+$/, '');
+            const supabaseKey = keyInput.value.trim();
+            
+            if (!supabaseUrl || !supabaseKey) {
+                renderError(iframe, "Configuration Missing", "Supabase credentials are required to retrieve content. Please input your Project URL and Key in the fields above.");
+                return;
+            }
 
             try {
-                const docRef = doc(window.db, COLLECTION_PATH, docId);
-                const docSnap = await getDoc(docRef);
+                // Supabase REST API endpoint for retrieving content by ID
+                const apiUrl = `${supabaseUrl}/rest/v1/hosted_html?id=eq.${contentId}&select=content,expires_at`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'apikey': supabaseKey,
+                        'Authorization': `Bearer ${supabaseKey}`,
+                    },
+                });
 
-                if (!docSnap.exists()) {
-                    renderError("404 Not Found", `The hosted content ID <b>${docId}</b> does not exist.`);
+                if (response.status === 404 || response.status === 400) {
+                    renderError(iframe, "Content Not Found", "The link is expired, the content ID is invalid, or RLS is blocking the read operation.");
                     return;
                 }
 
-                const data = docSnap.data();
-                const now = new Date().getTime();
-                const expiresAt = new Date(data.expiresAt).getTime();
+                if (!response.ok) {
+                     let errorText = await response.text();
+                     console.error("Supabase Retrieval Error Response:", errorText);
+                    throw new Error(`Retrieval failed with status ${response.status}.`);
+                }
+                
+                const data = await response.json();
+
+                if (!data || data.length === 0) {
+                    renderError(iframe, "Content Not Found", "The link is invalid or the content has expired.");
+                    return;
+                }
+                
+                const record = data[0];
+                const expiresAt = new Date(record.expires_at);
+                const now = new Date();
 
                 if (now > expiresAt) {
-                    renderError("Content Expired", `This content expired on ${new Date(expiresAt).toLocaleDateString()}.`);
+                    renderError(iframe, "Content Expired", `This hosted HTML expired on ${expiresAt.toLocaleDateString()}.`);
                     return;
                 }
 
                 // Render the content directly
-                iframe.srcdoc = data.content;
+                iframe.srcdoc = record.content;
 
             } catch (e) {
-                console.error("Firestore Retrieval Error:", e);
-                renderError("Database Error", `Failed to retrieve content. Check console for details.`);
+                console.error("Supabase Retrieval Error:", e);
+                renderError(iframe, "Retrieval Failed", `Error connecting to Supabase: ${e.message}. Check your console for details and ensure your credentials and RLS are correct.`);
             }
         };
 
         /** Checks the URL hash for an ID and routes the app. */
-        window.checkAndRoute = async () => {
-            const docId = window.location.hash.substring(1); // Get content after '#'
+        const checkAndRoute = async () => {
+            const contentId = window.location.hash.substring(1); // Get content after '#'
             const appControls = document.getElementById('app-controls');
             const hostOutput = document.getElementById('host-output');
             
-            if (docId && docId.length > 3) {
+            if (contentId && contentId.length >= 8) { // Supabase IDs are 8 chars
                 // Host Mode: Hide controls and show full-screen host view
                 document.body.classList.add('host-mode');
-                document.getElementById('main-container').classList.add('h-screen', 'w-full', '!p-0');
+                document.getElementById('main-container').classList.add('h-screen', 'w-full');
                 appControls.classList.add('hidden');
                 hostOutput.classList.remove('hidden');
 
-                // If Firebase isn't ready yet, wait for it
-                if (!window.isAuthReady) {
-                    // Quick check, but the window.onload handler will initialize it
-                    await new Promise(resolve => setTimeout(resolve, 500)); 
-                    if (!window.isAuthReady) {
-                        // Display a loading state while waiting for auth
-                         document.getElementById('content-iframe').srcdoc = `<div style="padding: 20px; text-align: center; font-family: sans-serif; color: #4f46e5;">
-                            <h1 style="font-size: 1.5rem;">Loading Content...</h1>
-                            <p style="color: #6b7280;">Waiting for database connection to retrieve <b>${docId}</b>.</p>
-                        </div>`;
-                        // Re-check after a brief moment (or rely on the main flow)
-                    }
-                }
-                
-                // Once ready, retrieve and render
-                if (window.isAuthReady && window.db) {
-                    await window.retrieveAndRender(docId);
-                }
+                // Retrieve and render immediately
+                await retrieveAndRender(contentId);
 
             } else {
                 // Generator Mode: Show controls
                 hostOutput.classList.add('hidden');
                 appControls.classList.remove('hidden');
                 document.body.classList.remove('host-mode');
-                document.getElementById('main-container').classList.remove('h-screen', 'w-full', '!p-0');
+                document.getElementById('main-container').classList.remove('h-screen', 'w-full');
             }
         };
 
-        // Initialize Firebase on script load
-        initializeFirebase();
+        // Run the routing logic on page load
+        window.onload = checkAndRoute;
 
         // Listen for hash changes if the user manually changes the URL hash
-        window.addEventListener('hashchange', window.checkAndRoute);
+        window.addEventListener('hashchange', checkAndRoute);
 
-    </script>
-    <!-- Load Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'primary': '#4f46e5', // Indigo-600
-                        'background': '#f3f4f6', // Gray-100
-                        'surface': '#ffffff', // White
-                        'text-dark': '#1f2937', // Gray-900
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            font-family: 'Inter', sans-serif;
-        }
-        #main-container {
-            min-height: 100vh;
-        }
-        #content-iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-            background-color: white;
-            /* Ensure the iframe is visible when in host mode */
-        }
-        .host-mode #main-container {
-            padding: 0 !important;
-        }
-    </style>
-</head>
-<body class="bg-background text-text-dark">
-
-    <div id="main-container" class="p-4 sm:p-8 flex flex-col items-center justify-start space-y-8">
-
-        <!-- Error/Message Box -->
-        <div id="message-box" class="fixed top-0 left-1/2 -translate-x-1/2 mt-4 p-3 rounded-lg shadow-lg text-sm font-medium z-50 min-w-[300px] text-center hidden" role="alert"></div>
-
-        <!-- UI Controls Wrapper (Generator Mode) -->
-        <div id="app-controls" class="w-full max-w-4xl">
-            <header class="text-center mb-8">
-                <h1 class="text-4xl font-extrabold text-primary">Persistent HTML Hoster</h1>
-                <p class="mt-2 text-lg text-gray-600">Hosts large HTML content using a database, providing a clean, shareable URL.</p>
-                <p class="mt-1 text-sm text-red-500 font-semibold">Content is hosted remotely and expires after 7 days.</p>
-            </header>
-
-            <!-- Control Panel -->
-            <div class="bg-surface p-6 rounded-xl shadow-2xl space-y-4 border border-gray-200">
-                <h2 class="text-2xl font-semibold mb-4 border-b border-gray-300 pb-2">Upload Content</h2>
-
-                <!-- Input: Raw HTML for Uploading -->
-                <div>
-                    <label for="raw-html-input" class="block text-sm font-medium mb-1">1. Enter Raw HTML (Supports large content):</label>
-                    <textarea id="raw-html-input" rows="8" placeholder="Paste your full HTML content here (e.g., <html>...</html>)" class="w-full p-3 rounded-lg bg-gray-50 text-text-dark border-gray-300 focus:ring-primary focus:border-primary"></textarea>
-                </div>
-                
-                <!-- Upload Button -->
-                <!-- Button is disabled until Firebase init is complete -->
-                <button 
-                    id="generate-button" 
-                    onclick="uploadAndGenerateLink()" 
-                    disabled 
-                    class="w-full bg-primary hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-indigo-400/50 opacity-50 cursor-not-allowed">
-                    Initializing Database...
-                </button>
-
-                <!-- Output: Generated URL -->
-                <div id="url-output-container" class="mt-4 hidden">
-                    <label for="generated-url" class="block text-sm font-medium mb-1">2. Generated Hosting URL (Click to Copy):</label>
-                    <div class="relative">
-                        <input type="text" id="generated-url" readonly class="w-full p-3 pr-12 rounded-lg bg-gray-100 text-green-700 font-mono text-sm border-gray-300">
-                        <button id="copy-url-button" class="absolute inset-y-0 right-0 p-3 text-gray-500 hover:text-primary transition" title="Copy URL">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v2" />
-                            </svg>
-                        </button>
-                    </div>
-                    <p class="text-xs mt-1 text-gray-500">The content is stored remotely in the database. Share this link for hosting.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Iframe for Hosted Content (Visible in Host Mode) -->
-        <div id="host-output" class="w-full h-full flex-1 hidden">
-             <iframe id="content-iframe" title="Hosted Content"></iframe>
-        </div>
-    </div>
-
-    <script type="text/javascript">
-        // Event listeners attached outside the module script block
-        window.onload = function() {
-            // Check the URL hash immediately after Firebase has had a moment to initialize
-            setTimeout(window.checkAndRoute, 200);
-
-            const copyUrlButton = document.getElementById('copy-url-button');
-            const generatedUrlInput = document.getElementById('generated-url');
-            
-            // Wait for the copy button to exist
-            if (copyUrlButton) {
-                copyUrlButton.addEventListener('click', () => {
-                    generatedUrlInput.select();
-                    // Use document.execCommand for better compatibility in iframe environments
-                    document.execCommand('copy'); 
-                    window.showMessage("Hosting URL copied to clipboard!", 'success');
-                });
-            }
-        };
     </script>
 </body>
 </html>
-
