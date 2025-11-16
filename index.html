@@ -27,14 +27,16 @@
         }
     </script>
     <style>
+        /* FIX: Use !important to strongly ensure zero margin/padding on root elements */
         html, body {
             height: 100%;
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
             overflow: auto;
         }
         #main-container {
             min-height: 100vh;
+            overflow-y: auto; /* Allow scrolling in generator mode */
         }
         #content-iframe {
             width: 100%;
@@ -47,8 +49,18 @@
             overflow: hidden;
         }
         .host-mode #main-container {
+            /* Removes p-4/sm:p-8 */
             padding: 0 !important;
             height: 100vh;
+            /* FIX: Explicitly remove margin and spacing utilities from main container when hosting */
+            margin: 0 !important; 
+            gap: 0 !important;
+            --tw-space-y-reverse: 0 !important; 
+        }
+        /* Ensure the host output takes up all available space */
+        .host-mode #host-output {
+            flex-grow: 1;
+            height: 100%;
         }
     </style>
 </head>
@@ -61,9 +73,8 @@
         <!-- UI Controls Wrapper (Generator Mode) -->
         <div id="app-controls" class="w-full max-w-4xl">
             <header class="text-center mb-8">
-                <h1 class="text-4xl font-extrabold text-primary-dark">Seamless HTML Hoster</h1>
+                <h1 class="text-4xl font-extrabold text-primary-dark">HTML Hoster</h1>
                 <p class="mt-2 text-lg text-gray-600">Hosts large HTML files with clean URLs and 7-day expiry.</p>
-                <p class="mt-1 text-sm text-gray-500 font-semibold">Backend connected to Supabase project: bqpfmthtuakjlclrnuvd</p>
             </header>
 
             <!-- Control Panel -->
