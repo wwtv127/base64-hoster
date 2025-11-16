@@ -242,6 +242,13 @@
         /** Fetches content from Supabase by ID and renders it. */
         const retrieveAndRender = async (contentId) => {
             const iframe = document.getElementById('content-iframe');
+            
+            // Check for hardcoded credentials availability (FIX: Explicit check for timing issues)
+            if (!SUPABASE_URL || !SUPABASE_KEY) {
+                renderError(iframe, "Configuration Error", "The hardcoded Supabase URL or Key is missing from the script variables. Please check the code.");
+                return;
+            }
+
             const supabaseUrl = SUPABASE_URL.replace(/\/+$/, '');
             const supabaseKey = SUPABASE_KEY;
             
