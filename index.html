@@ -125,7 +125,7 @@
                             </svg>
                         </button>
                     </div>
-                    <p class="text-xs mt-1 text-gray-500">The content is stored in your Supabase database and retrieved using this clean ID.</p>
+                    <p class="text-xs mt-1 text-gray-500">The content is stored in a Supabase database</p>
                 </div>
             </div>
         </div>
@@ -210,7 +210,7 @@
             }
 
             generateButton.disabled = true;
-            generateButton.textContent = 'Uploading... (Awaiting Supabase)';
+            generateButton.textContent = 'Uploading...';
             generateButton.classList.add('opacity-50', 'cursor-not-allowed');
             
             const contentId = generateId();
@@ -260,7 +260,7 @@
                 showMessage(`Upload Failed: ${e.message}`, 'error');
             } finally {
                 generateButton.disabled = false;
-                generateButton.textContent = 'Upload & Generate Permanent Link';
+                generateButton.textContent = 'Upload & Generate Link';
                 generateButton.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         };
@@ -272,7 +272,7 @@
             const iframe = document.getElementById('content-iframe');
             
             if (!SUPABASE_URL || !SUPABASE_KEY) {
-                renderError(iframe, "Configuration Error", "The hardcoded Supabase URL or Key is missing from the script variables. Please check the code.");
+                renderError(iframe, "Configuration Error", "The hardcoded Supabase URL or Key is missing from the script variables");
                 return;
             }
 
